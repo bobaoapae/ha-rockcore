@@ -20,8 +20,12 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR]
 
 
-def _timezone_offset_hours(hass: HomeAssistant) -> float:
-    """The RC-C app sends the local UTC offset in hours; mirror it."""
+def _timezone_offset_hours() -> float:
+    """The RC-C app sends the local UTC offset in hours; mirror it.
+
+    ``dt_util.now()`` already resolves to the timezone configured in Home
+    Assistant, so this needs nothing from ``hass``.
+    """
     offset = dt_util.now().utcoffset()
     if offset is None:
         return 0
@@ -34,7 +38,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: RockcoreConfigEntry) -> 
         async_get_clientsession(hass),
         entry.data[CONF_EMAIL],
         entry.data[CONF_PASSWORD],
-        timezone_offset=_timezone_offset_hours(hass),
+        timezone_offset=_timezone_offset_hours(),
     )
 
     try:
