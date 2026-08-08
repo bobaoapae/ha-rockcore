@@ -1,0 +1,12 @@
+{
+  "domain": "rockcore",
+  "name": "Rockcore Solar (RC-C)",
+  "codeowners": ["@bobaoapae"],
+  "config_flow": true,
+  "documentation": "https://github.com/bobaoapae/ha-rockcore",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/bobaoapae/ha-rockcore/issues",
+  "requirements": [],
+  "version": "1.0.0"
+}

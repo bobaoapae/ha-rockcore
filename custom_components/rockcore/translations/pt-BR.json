@@ -1,0 +1,66 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Rockcore Solar (RC-C)",
+        "description": "Entre com a mesma conta que você usa no aplicativo RC-C.",
+        "data": {
+          "email": "E-mail ou usuário",
+          "password": "Senha"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Rockcore Solar (RC-C)",
+        "description": "A senha de {email} foi recusada. Informe-a novamente.",
+        "data": {
+          "password": "Senha"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Não foi possível falar com a nuvem da Rockcore.",
+      "invalid_auth": "E-mail ou senha incorretos. A nuvem da Rockcore bloqueia a conta após dez tentativas erradas, então confira as credenciais no aplicativo RC-C antes de tentar de novo."
+    },
+    "abort": {
+      "already_configured": "Esta conta Rockcore já está configurada.",
+      "reauth_successful": "Reautenticação concluída."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opções do Rockcore Solar",
+        "data": {
+          "scan_interval": "Intervalo de atualização"
+        },
+        "data_description": {
+          "scan_interval": "De quanto em quanto tempo consultar a nuvem da Rockcore. A usina publica valores novos a cada minuto, aproximadamente."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "power": { "name": "Potência" },
+      "energy_today": { "name": "Energia hoje" },
+      "energy_month": { "name": "Energia no mês" },
+      "energy_year": { "name": "Energia no ano" },
+      "energy_total": { "name": "Energia total" },
+      "capacity": { "name": "Potência instalada" },
+      "efficiency": { "name": "Eficiência" },
+      "co2_avoided": { "name": "CO2 evitado" },
+      "last_update": { "name": "Última atualização" },
+      "grid_voltage": { "name": "Tensão da rede" },
+      "grid_frequency": { "name": "Frequência da rede" },
+      "temperature": { "name": "Temperatura" },
+      "wifi_strength": { "name": "Sinal Wi-Fi" },
+      "pv_power": { "name": "Potência PV {index}" },
+      "pv_voltage": { "name": "Tensão PV {index}" },
+      "pv_current": { "name": "Corrente PV {index}" }
+    },
+    "binary_sensor": {
+      "online": { "name": "Online" },
+      "alarm": { "name": "Alarme" }
+    }
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Rockcore Solar (RC-C)",
+        "description": "Sign in with the same account you use in the RC-C app.",
+        "data": {
+          "email": "E-mail or username",
+          "password": "Password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Rockcore Solar (RC-C)",
+        "description": "The password for {email} was rejected. Enter it again.",
+        "data": {
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not reach the Rockcore cloud.",
+      "invalid_auth": "Wrong e-mail or password. The Rockcore cloud locks the account after ten failed attempts, so double-check the credentials in the RC-C app before trying again."
+    },
+    "abort": {
+      "already_configured": "This Rockcore account is already set up.",
+      "reauth_successful": "Re-authentication was successful."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Rockcore Solar options",
+        "data": {
+          "scan_interval": "Polling interval"
+        },
+        "data_description": {
+          "scan_interval": "How often to poll the Rockcore cloud. The plant reports new values roughly every minute."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "power": { "name": "Power" },
+      "energy_today": { "name": "Energy today" },
+      "energy_month": { "name": "Energy this month" },
+      "energy_year": { "name": "Energy this year" },
+      "energy_total": { "name": "Total energy" },
+      "capacity": { "name": "Installed capacity" },
+      "efficiency": { "name": "Efficiency" },
+      "co2_avoided": { "name": "CO2 avoided" },
+      "last_update": { "name": "Last update" },
+      "grid_voltage": { "name": "Grid voltage" },
+      "grid_frequency": { "name": "Grid frequency" },
+      "temperature": { "name": "Temperature" },
+      "wifi_strength": { "name": "Wi-Fi signal" },
+      "pv_power": { "name": "PV {index} power" },
+      "pv_voltage": { "name": "PV {index} voltage" },
+      "pv_current": { "name": "PV {index} current" }
+    },
+    "binary_sensor": {
+      "online": { "name": "Online" },
+      "alarm": { "name": "Alarm" }
+    }
+  }
+}
