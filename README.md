@@ -65,13 +65,21 @@ e-mail and password you use in the RC-C app.
 > instead — but do double-check the credentials in the app before retrying by hand.
 
 The polling interval (default **60 s**, range 30–900 s) can be changed under the integration's
-**Configure** button. Each poll costs `2 + 2 × (number of inverters)` cloud requests.
+**Configure** button. Each poll costs `1 + 2 × plants + 2 × inverters` cloud requests — 17 for a
+single plant with seven microinverters.
 
 ## Energy dashboard
 
-**Settings → Dashboards → Energy → Solar panels → Add solar production**, and pick
-**`sensor.<plant>_total_energy`** (the lifetime counter). Statistics start accumulating from the
-moment the sensor is added; history from before the integration existed is not backfilled.
+**Settings → Dashboards → Energy → Solar panels → Add solar production**, and pick the plant's
+**Total energy** sensor — the lifetime counter, not the daily one. (Its entity id follows your
+Home Assistant language, e.g. `sensor.<plant>_total_energy` or `sensor.<plant>_energia_total`.)
+
+Statistics start accumulating from the moment the sensor is added; history from before the
+integration existed is not backfilled. The Energy dashboard's hourly figures only appear after the
+next top-of-the-hour rollup, so the first hour can look empty.
+
+If you already have another solar system in the dashboard, add this one as a **second** solar
+source — Home Assistant sums them.
 
 ## How it works
 
