@@ -24,12 +24,20 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Any
 
 import aiohttp
 from aiohttp import ClientError, ClientResponseError, ClientSession
 
-from .const import API_BASE, API_OEM, API_SCOPE, REQUEST_TIMEOUT
+from .const import (
+    ALARM_MAX_PAGES,
+    ALARM_PAGE_SIZE,
+    API_BASE,
+    API_OEM,
+    API_SCOPE,
+    REQUEST_TIMEOUT,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -72,6 +80,7 @@ class RockcoreClient:
         self._user_id: str | None = None
         self._owner_id: str | None = None
         self._user_name: str | None = None
+        self._area_id: str | None = None
 
     @property
     def user_id(self) -> str | None:
@@ -87,6 +96,11 @@ class RockcoreClient:
     def user_name(self) -> str | None:
         """Display name of the logged in account."""
         return self._user_name
+
+    @property
+    def area_id(self) -> str | None:
+        """Region id of the account, required to filter alarms server-side."""
+        return self._area_id
 
     def _headers(self, *, authenticated: bool) -> dict[str, str]:
         headers = {
@@ -148,9 +162,12 @@ class RockcoreClient:
 
         self._token = token
         self._owner_id = str(owner_id)
+        login_user = data.get("loginUser") or {}
         user = response.get("user") or {}
         self._user_id = user.get("userId")
-        self._user_name = user.get("userName") or (data.get("loginUser") or {}).get("userName")
+        self._user_name = user.get("userName") or login_user.get("userName")
+        area_id = login_user.get("areaId")
+        self._area_id = str(area_id) if area_id is not None else None
         _LOGGER.debug("Logged in to the Rockcore cloud as %s", self._user_name)
 
     async def _async_request(
@@ -253,3 +270,78 @@ class RockcoreClient:
         """Return live electrical values of one inverter, including its PV inputs."""
         data = await self._async_request("GET", f"/device/detail/{org_id}")
         return data if isinstance(data, dict) else {}
+
+    async def async_get_active_alarms(self) -> list[dict[str, Any]]:
+        """Return the alarms that have not recovered yet.
+
+        Only ``/alarm-notice-set/pageByAreaId`` can filter on ``recovered``
+        server-side, and it takes its filters as query parameters rather than a
+        JSON body. Despite the name it is still scoped to what the account may
+        see, so no foreign plants leak in.
+
+        The window starts at the epoch on purpose: alarms can stay active for
+        weeks (the oldest one here dates from commissioning day), and a rolling
+        window would silently drop them and under-report the count.
+        """
+        if not self._area_id:
+            # Without a region we cannot use the server-side filter at all.
+            return []
+
+        alarms: list[dict[str, Any]] = []
+        now_ms = int(time.time() * 1000)
+        for page in range(1, ALARM_MAX_PAGES + 1):
+            data = await self._async_request(
+                "POST",
+                "/alarm-notice-set/pageByAreaId",
+                params={
+                    "page": page,
+                    "size": ALARM_PAGE_SIZE,
+                    "start": 0,
+                    "end": now_ms,
+                    "recovered": "false",
+                    "areaId": self._area_id,
+                },
+            )
+            if not isinstance(data, dict):
+                break
+            content = data.get("content")
+            if not isinstance(content, list) or not content:
+                break
+            alarms.extend(content)
+            try:
+                total = int(data.get("total", len(alarms)))
+            except (TypeError, ValueError):
+                total = len(alarms)
+            if len(alarms) >= total:
+                break
+        else:
+            _LOGGER.warning(
+                "Stopped after %s pages of active alarms; the count may be truncated",
+                ALARM_MAX_PAGES,
+            )
+        return alarms
+
+    async def async_get_latest_alarm(self) -> dict[str, Any] | None:
+        """Return the most recent alarm, recovered or not.
+
+        ``orderByField`` only accepts 0 (time); 1 and 2 make the backend throw.
+        """
+        now_ms = int(time.time() * 1000)
+        data = await self._async_request(
+            "POST",
+            "/alarm-notice-set/page",
+            json={
+                "page": 1,
+                "row": 1,
+                "start": 0,
+                "end": now_ms,
+                "orderByField": 0,
+                "orderByAscOrDesc": 0,
+            },
+        )
+        if not isinstance(data, dict):
+            return None
+        content = data.get("content")
+        if isinstance(content, list) and content:
+            return content[0]
+        return None

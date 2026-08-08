@@ -14,6 +14,7 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .coordinator import InverterData, RockcoreConfigEntry, RockcoreCoordinator, StationData
 from .entity import RockcoreInverterEntity, RockcoreStationEntity
@@ -32,11 +33,51 @@ def _as_bool(value: Any) -> bool | None:
     return None
 
 
+def alarm_attributes(alarms: list[dict[str, Any]]) -> dict[str, Any]:
+    """Summarise open alarms for the attribute dictionary of an entity.
+
+    The per-level counts are worth more than the plain total for automations.
+    The cloud never clears some alarms — the "Channel N undervoltage" ones here
+    have been open since commissioning — so this entity can sit at ``on``
+    indefinitely. Trigger on a level count or on the count changing instead of
+    on the state flipping.
+    """
+    levels: dict[str, int] = {}
+    for alarm in alarms:
+        level = alarm.get("alarmLevel")
+        if level is not None:
+            levels[f"level_{level}"] = levels.get(f"level_{level}", 0) + 1
+    return {
+        "active_alarm_count": len(alarms),
+        "active_alarm_levels": levels,
+        "active_alarms": [
+            {
+                "message": alarm.get("message"),
+                "level": alarm.get("alarmLevel"),
+                "device": alarm.get("deviceName"),
+                "since": _alarm_timestamp(alarm),
+            }
+            for alarm in alarms
+        ],
+    }
+
+
+def _alarm_timestamp(alarm: dict[str, Any]) -> str | None:
+    """Alarm times are millisecond epochs delivered as strings."""
+    raw = alarm.get("time") or alarm.get("createTime")
+    try:
+        millis = float(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return dt_util.utc_from_timestamp(millis / 1000).isoformat()
+
+
 @dataclass(frozen=True, kw_only=True)
 class RockcoreStationBinarySensorDescription(BinarySensorEntityDescription):
     """Describes a plant-level binary sensor."""
 
     value_fn: Callable[[StationData], bool | None]
+    attrs_fn: Callable[[StationData], dict[str, Any]] | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -44,6 +85,7 @@ class RockcoreInverterBinarySensorDescription(BinarySensorEntityDescription):
     """Describes an inverter-level binary sensor."""
 
     value_fn: Callable[[InverterData], bool | None]
+    attrs_fn: Callable[[InverterData], dict[str, Any]] | None = None
 
 
 STATION_BINARY_SENSORS: tuple[RockcoreStationBinarySensorDescription, ...] = (
@@ -58,7 +100,10 @@ STATION_BINARY_SENSORS: tuple[RockcoreStationBinarySensorDescription, ...] = (
         key="alarm",
         translation_key="alarm",
         device_class=BinarySensorDeviceClass.PROBLEM,
-        value_fn=lambda station: _as_bool(station.info.get("isAlarm")),
+        # Driven by the open-alarm list, not by the plant's own ``isAlarm``
+        # flag: that flag stays false even with alarms open, so it never fired.
+        value_fn=lambda station: bool(station.active_alarms),
+        attrs_fn=lambda station: alarm_attributes(station.active_alarms),
     ),
 )
 
@@ -72,6 +117,13 @@ INVERTER_BINARY_SENSORS: tuple[RockcoreInverterBinarySensorDescription, ...] = (
         value_fn=lambda inv: _as_bool(
             inv.detail.get("isOnline", inv.summary.get("isOnline"))
         ),
+    ),
+    RockcoreInverterBinarySensorDescription(
+        key="alarm",
+        translation_key="alarm",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        value_fn=lambda inv: bool(inv.active_alarms),
+        attrs_fn=lambda inv: alarm_attributes(inv.active_alarms),
     ),
 )
 
@@ -120,6 +172,13 @@ class RockcoreStationBinarySensor(RockcoreStationEntity, BinarySensorEntity):
         """Return the current state."""
         return self.entity_description.value_fn(self.station)
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return the open alarms, when this sensor tracks them."""
+        if self.entity_description.attrs_fn is None:
+            return None
+        return self.entity_description.attrs_fn(self.station)
+
 
 class RockcoreInverterBinarySensor(RockcoreInverterEntity, BinarySensorEntity):
     """An inverter-level binary sensor."""
@@ -142,3 +201,10 @@ class RockcoreInverterBinarySensor(RockcoreInverterEntity, BinarySensorEntity):
     def is_on(self) -> bool | None:
         """Return the current state."""
         return self.entity_description.value_fn(self.inverter)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return the open alarms, when this sensor tracks them."""
+        if self.entity_description.attrs_fn is None:
+            return None
+        return self.entity_description.attrs_fn(self.inverter)

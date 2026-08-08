@@ -32,11 +32,19 @@ class InverterData:
     data: dict[str, Any] = field(default_factory=dict)
     #: ``/device/detail/{id}`` — grid voltage, frequency, temperature, pvList.
     detail: dict[str, Any] = field(default_factory=dict)
+    #: Alarms of this inverter that have not recovered yet.
+    active_alarms: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def serial(self) -> str:
         """Serial number as printed on the unit."""
         return str(self.summary.get("sn") or self.detail.get("sn") or self.org_id)
+
+    @property
+    def mdm_id(self) -> str | None:
+        """UUID-style device id (``dev_...``), the one alarms are tagged with."""
+        mdm = self.summary.get("devMdmId") or self.detail.get("devMdmId")
+        return str(mdm) if mdm else None
 
     @property
     def name(self) -> str:
@@ -76,6 +84,10 @@ class StationData:
     #: Static plant configuration from ``/station/item/info``.
     config: dict[str, Any] = field(default_factory=dict)
     inverters: dict[str, InverterData] = field(default_factory=dict)
+    #: Alarms of this plant's inverters that have not recovered yet.
+    active_alarms: list[dict[str, Any]] = field(default_factory=list)
+    #: Most recent alarm of the account, recovered or not.
+    latest_alarm: dict[str, Any] | None = None
 
     @property
     def name(self) -> str:
@@ -163,7 +175,55 @@ class RockcoreCoordinator(DataUpdateCoordinator[dict[str, StationData]]):
             )
         )
 
+        await self._async_load_alarms(stations)
         return stations
+
+    async def _async_load_alarms(self, stations: dict[str, StationData]) -> None:
+        """Attach the open alarms to the plants and inverters they belong to.
+
+        Alarms are listed per account, not per plant, so they are bucketed here
+        by device. The plant's ``isAlarm`` flag is deliberately ignored: it stays
+        false even while alarms are open, so it never reflected reality.
+        """
+        active, latest = await asyncio.gather(
+            self.client.async_get_active_alarms(),
+            self.client.async_get_latest_alarm(),
+        )
+
+        # An alarm carries the device UUID and the serial, never the numeric id.
+        by_mdm: dict[str, InverterData] = {}
+        by_serial: dict[str, InverterData] = {}
+        for station in stations.values():
+            for inverter in station.inverters.values():
+                inverter.active_alarms = []
+                if mdm := inverter.mdm_id:
+                    by_mdm[mdm] = inverter
+                by_serial[inverter.serial] = inverter
+            station.active_alarms = []
+            station.latest_alarm = latest
+
+        owners: dict[str, StationData] = {
+            org_id: station
+            for station in stations.values()
+            for org_id in station.inverters
+        }
+
+        unmatched = 0
+        for alarm in active:
+            device_id = alarm.get("deviceId")
+            name = alarm.get("deviceName")
+            inverter = by_mdm.get(str(device_id)) if device_id else None
+            if inverter is None and name:
+                inverter = by_serial.get(str(name))
+            if inverter is None:
+                unmatched += 1
+                continue
+            inverter.active_alarms.append(alarm)
+            if station := owners.get(inverter.org_id):
+                station.active_alarms.append(alarm)
+
+        if unmatched:
+            _LOGGER.debug("%s open alarm(s) did not match a known inverter", unmatched)
 
     async def async_load_station_config(self) -> None:
         """Fetch the static plant configuration once, for device metadata."""

@@ -24,3 +24,10 @@ API_OEM: Final = "rc"
 API_SCOPE: Final = "yx_test"
 
 REQUEST_TIMEOUT: Final = 30
+
+#: Page size used when listing alarms. The backend rejects anything above 100
+#: with ``400 / "request param invalid"``.
+ALARM_PAGE_SIZE: Final = 100
+
+#: Safety net so a pathological account cannot spin through endless pages.
+ALARM_MAX_PAGES: Final = 5

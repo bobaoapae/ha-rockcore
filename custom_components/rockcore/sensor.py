@@ -74,11 +74,25 @@ def _as_timestamp(value: Any) -> datetime | None:
     return dt_util.utc_from_timestamp(millis / 1000)
 
 
+def _latest_alarm_attrs(station: StationData) -> dict[str, Any]:
+    """Detail of the most recent alarm, for the attribute dictionary."""
+    alarm = station.latest_alarm or {}
+    return {
+        "level": alarm.get("alarmLevel"),
+        "device": alarm.get("deviceName"),
+        "recovered": alarm.get("recovered"),
+        "confirmed": alarm.get("confirmed"),
+        "time": _as_timestamp(alarm.get("time")),
+        "recovered_at": _as_timestamp(alarm.get("recoverTime")),
+    }
+
+
 @dataclass(frozen=True, kw_only=True)
 class RockcoreStationSensorDescription(SensorEntityDescription):
     """Describes a plant-level sensor."""
 
     value_fn: Callable[[StationData], Any]
+    attrs_fn: Callable[[StationData], dict[str, Any]] | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -169,6 +183,19 @@ STATION_SENSORS: tuple[RockcoreStationSensorDescription, ...] = (
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda station: _as_timestamp(station.info.get("lastUpdateTime")),
+    ),
+    RockcoreStationSensorDescription(
+        key="active_alarms",
+        translation_key="active_alarms",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda station: len(station.active_alarms),
+    ),
+    RockcoreStationSensorDescription(
+        key="latest_alarm",
+        translation_key="latest_alarm",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda station: (station.latest_alarm or {}).get("message"),
+        attrs_fn=_latest_alarm_attrs,
     ),
 )
 
@@ -364,6 +391,13 @@ class RockcoreStationSensor(RockcoreStationEntity, SensorEntity):
     def native_value(self) -> Any:
         """Return the current value."""
         return self.entity_description.value_fn(self.station)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return the extra detail this sensor carries, if any."""
+        if self.entity_description.attrs_fn is None:
+            return None
+        return self.entity_description.attrs_fn(self.station)
 
 
 class RockcoreInverterSensor(RockcoreInverterEntity, SensorEntity):

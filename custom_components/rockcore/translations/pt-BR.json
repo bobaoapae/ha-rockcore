@@ -56,7 +56,9 @@
       "wifi_strength": { "name": "Sinal Wi-Fi" },
       "pv_power": { "name": "Potência PV {index}" },
       "pv_voltage": { "name": "Tensão PV {index}" },
-      "pv_current": { "name": "Corrente PV {index}" }
+      "pv_current": { "name": "Corrente PV {index}" },
+      "active_alarms": { "name": "Alarmes ativos" },
+      "latest_alarm": { "name": "Último alarme" }
     },
     "binary_sensor": {
       "online": { "name": "Online" },
