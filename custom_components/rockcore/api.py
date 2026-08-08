@@ -8,10 +8,13 @@ protocol.
 Authentication
 --------------
 ``POST /auth/login`` takes the e-mail/username and the *plain* password and
-returns a JWT (valid for a year) plus the numeric owner id. Every subsequent
-request needs both ``Authorization: Bearer <token>`` and an ``OwnerId`` header;
-without the latter the backend answers ``400 / "Ownerid in http header can't be
-null"``. An expired or invalid token yields a bare ``401``.
+returns a JWT (valid for a year) plus the numeric owner id. It also requires the
+``oem`` header to pick the tenant — without it the login fails with
+``code 500 / "Not a null user"``, which reads like a bad-credentials error but
+is not. Every subsequent request needs both ``Authorization: Bearer <token>``
+and an ``OwnerId`` header; without the latter the backend answers ``400 /
+"Ownerid in http header can't be null"``. An expired or invalid token yields a
+bare ``401``.
 
 Note that the backend locks the account after ten consecutive bad passwords, so
 callers must never retry a :class:`RockcoreAuthError` in a loop.
@@ -90,6 +93,8 @@ class RockcoreClient:
             "Accept": "application/json, text/plain, */*",
             "Accept-Language": "en-US",
             "Content-Type": "application/json;charset=utf-8",
+            # Mandatory on /auth/login (it selects the OEM tenant); dropping it
+            # fails the login with a misleading code 500 "Not a null user".
             "oem": API_OEM,
             "scope": API_SCOPE,
             "Timezone-Offset": str(self._timezone_offset),

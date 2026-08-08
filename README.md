@@ -96,9 +96,17 @@ which talks to a JowoIoT backend under `/jowoiot-proxy/api/project/rc`:
 | `GET /device/data/{id}` | Energy counters of one inverter |
 | `GET /device/detail/{id}` | Grid voltage/frequency, temperature, Wi-Fi and the MPPT inputs |
 
-Every authenticated request needs both `Authorization: Bearer <jwt>` and an `OwnerId` header;
-without the latter the backend answers `400 / "Ownerid in http header can't be null"`. Energy
-counters arrive in whole watt-hours and are converted to kWh here.
+Header quirks, all of them load-bearing:
+
+- `POST /auth/login` needs an `oem: rc` header to pick the tenant. Without it the login fails with
+  `code 500 / "Not a null user"` — which looks like a credentials error but is not.
+- Every authenticated request needs **both** `Authorization: Bearer <jwt>` and an `OwnerId` header;
+  without the latter the backend answers `400 / "Ownerid in http header can't be null"`.
+- A rejected password comes back as **HTTP 200 with `code: 500`**, while an expired token gives a
+  bare **401**. The two are handled differently: 401 triggers a silent re-login and one retry,
+  a rejected password never does.
+
+Energy counters arrive in whole watt-hours and are converted to kWh here.
 
 ## License
 
