@@ -283,24 +283,40 @@ class RockcoreClient:
         weeks (the oldest one here dates from commissioning day), and a rolling
         window would silently drop them and under-report the count.
         """
+        return await self._async_list_alarms(start_ms=0, recovered="false")
+
+    async def async_get_recent_alarms(self, days: int) -> list[dict[str, Any]]:
+        """Return every alarm of the last ``days``, recovered or not.
+
+        The isolation analysis cannot reuse ``async_get_active_alarms``: the
+        alarms it needs are mostly the recovered ones (98% of the level 1 events
+        on the reference plant), and they clear in about three minutes, far too
+        fast for any poll interval to sample them as they happen.
+        """
+        start_ms = int((time.time() - days * 86400) * 1000)
+        return await self._async_list_alarms(start_ms=start_ms, recovered=None)
+
+    async def _async_list_alarms(
+        self, *, start_ms: int, recovered: str | None
+    ) -> list[dict[str, Any]]:
+        """Page through ``pageByAreaId``, the only listing with server-side filters."""
         if not self._area_id:
             # Without a region we cannot use the server-side filter at all.
             return []
 
         alarms: list[dict[str, Any]] = []
-        now_ms = int(time.time() * 1000)
+        params: dict[str, Any] = {
+            "size": ALARM_PAGE_SIZE,
+            "start": start_ms,
+            "end": int(time.time() * 1000),
+            "areaId": self._area_id,
+        }
+        if recovered is not None:
+            params["recovered"] = recovered
+
         for page in range(1, ALARM_MAX_PAGES + 1):
             data = await self._async_request(
-                "POST",
-                "/alarm-notice-set/pageByAreaId",
-                params={
-                    "page": page,
-                    "size": ALARM_PAGE_SIZE,
-                    "start": 0,
-                    "end": now_ms,
-                    "recovered": "false",
-                    "areaId": self._area_id,
-                },
+                "POST", "/alarm-notice-set/pageByAreaId", params={**params, "page": page}
             )
             if not isinstance(data, dict):
                 break
@@ -316,7 +332,7 @@ class RockcoreClient:
                 break
         else:
             _LOGGER.warning(
-                "Stopped after %s pages of active alarms; the count may be truncated",
+                "Stopped after %s pages of alarms; the list may be truncated",
                 ALARM_MAX_PAGES,
             )
         return alarms

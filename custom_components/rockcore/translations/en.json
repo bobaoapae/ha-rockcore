@@ -58,6 +58,7 @@
       "pv_voltage": { "name": "PV {index} voltage" },
       "pv_current": { "name": "PV {index} current" },
       "active_alarms": { "name": "Active alarms" },
+      "isolated_alarm_inverters": { "name": "Inverters with isolated alarms" },
       "latest_alarm": { "name": "Latest alarm" }
     },
     "binary_sensor": {

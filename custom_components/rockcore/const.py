@@ -31,3 +31,18 @@ ALARM_PAGE_SIZE: Final = 100
 
 #: Safety net so a pathological account cannot spin through endless pages.
 ALARM_MAX_PAGES: Final = 5
+
+#: How far back the isolation analysis looks. Long enough for recurrence to
+#: mean something, short enough that a unit repaired last week stops counting.
+ALARM_HISTORY_DAYS: Final = 7
+
+#: Two alarms of the same kind this close together share a cause. Measured on
+#: the reference plant: grid events reach every inverter within a few seconds,
+#: so anything wider only makes the filter more conservative.
+ALARM_COINCIDENCE_WINDOW: Final = timedelta(seconds=120)
+
+#: A unit has to reoffend in this many of the last ``ALARM_RECENT_DAYS`` days
+#: before it is flagged, which is what separates a developing fault from the
+#: one-off blip every inverter produces now and then.
+ALARM_RECENT_DAYS: Final = 3
+ALARM_RECENT_DAYS_MIN: Final = 2

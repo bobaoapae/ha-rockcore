@@ -87,6 +87,31 @@ def _latest_alarm_attrs(station: StationData) -> dict[str, Any]:
     }
 
 
+def _isolated_alarm_attrs(station: StationData) -> dict[str, Any]:
+    """Per-inverter breakdown of the isolated-alarm analysis.
+
+    Reported but never alerted on: the thresholds were calibrated on a week of
+    data with no actual failure in it, so the numbers are here to be watched
+    before anything is wired to them.
+    """
+    stats = station.alarm_stats
+    return {
+        "alarms_examined": stats.total,
+        "isolated_alarms": stats.isolated_total,
+        "fleet_median": stats.median_isolated,
+        "flagged_inverters": stats.flagged,
+        "per_inverter": {
+            name: {
+                "isolated": entry.isolated,
+                "days": entry.isolated_days,
+                "days_recent": entry.isolated_days_recent,
+                "flagged": entry.flagged,
+            }
+            for name, entry in sorted(stats.per_device.items())
+        },
+    }
+
+
 @dataclass(frozen=True, kw_only=True)
 class RockcoreStationSensorDescription(SensorEntityDescription):
     """Describes a plant-level sensor."""
@@ -189,6 +214,14 @@ STATION_SENSORS: tuple[RockcoreStationSensorDescription, ...] = (
         translation_key="active_alarms",
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda station: len(station.active_alarms),
+    ),
+    RockcoreStationSensorDescription(
+        key="isolated_alarm_inverters",
+        translation_key="isolated_alarm_inverters",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda station: len(station.alarm_stats.flagged),
+        attrs_fn=_isolated_alarm_attrs,
     ),
     RockcoreStationSensorDescription(
         key="latest_alarm",

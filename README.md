@@ -25,6 +25,7 @@ microinverter as Home Assistant devices, ready for the **Energy dashboard**.
 | Online | connectivity | Diagnostic |
 | Active alarms | count | Open (not yet recovered) alarms across the plant's inverters |
 | Latest alarm | text | Most recent alarm; level, device and timestamps in the attributes |
+| Inverters with isolated alarms | count | Diagnostic; per-inverter breakdown in the attributes — read below |
 | Alarm | problem | On while any alarm is open — read the caveat below |
 
 **Per microinverter** (one device each, linked to the plant):
@@ -63,6 +64,35 @@ Two things worth knowing before you automate on them:
 
 Both alarm entities carry `active_alarm_count`, `active_alarm_levels` and the full `active_alarms`
 list in their attributes.
+
+### Isolated alarms
+
+Counting alarms tells you about the weather, not about your inverters. Over seven days on the
+reference plant (335 alarms, seven inverters) the daily alarm count correlated **-0.45** with the
+daily yield: the cloudiest day produced 86 alarms and the sunniest 41. 85% of them hit more than one
+inverter within two minutes and 31% hit all seven at once, which is a grid event, not a unit fault.
+
+`Inverters with isolated alarms` applies two filters instead:
+
+1. **Isolated** — the alarm only counts if no other inverter reported the same message within two
+   minutes. This is what removes the weather: after filtering, the count correlates **+0.31** with
+   the yield, and on the cloudiest day only 9 of the 86 alarms survived.
+2. **Recurrent** — the inverter is flagged only if it has isolated alarms on at least two of the
+   last three days *and* its seven-day total is above the median of the fleet. The median is the
+   control: on a bad day every unit collects a few isolated alarms, so the bar rises with them and
+   nobody stands out.
+
+What is left is a per-unit signal. On the reference plant two inverters have never produced a single
+isolated alarm while one produced 20 across five days, and the same seven days of data flag two
+units and stay quiet about the other five.
+
+The attributes carry `alarms_examined`, `isolated_alarms`, `fleet_median`, `flagged_inverters` and a
+`per_inverter` breakdown with `isolated`, `days`, `days_recent` and `flagged` for each unit.
+
+**This is a ranking, not a diagnosis, and it is deliberately not wired to any alert.** The
+thresholds were calibrated on a week of data that contains no actual failure, so watch the numbers
+for a while before you automate on them. It also does not replace comparing the MPPT inputs against
+each other: on the reference plant three dead panel connections produced no alarm at all.
 
 ## Installation
 

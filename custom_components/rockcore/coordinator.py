@@ -13,8 +13,15 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from .alarm_stats import AlarmStats, DeviceAlarmStats, compute_alarm_stats
 from .api import RockcoreAuthError, RockcoreClient, RockcoreError
-from .const import DOMAIN
+from .const import (
+    ALARM_COINCIDENCE_WINDOW,
+    ALARM_HISTORY_DAYS,
+    ALARM_RECENT_DAYS,
+    ALARM_RECENT_DAYS_MIN,
+    DOMAIN,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,6 +41,8 @@ class InverterData:
     detail: dict[str, Any] = field(default_factory=dict)
     #: Alarms of this inverter that have not recovered yet.
     active_alarms: list[dict[str, Any]] = field(default_factory=list)
+    #: Isolated-alarm score of this inverter, see :mod:`.alarm_stats`.
+    alarm_stats: DeviceAlarmStats = field(default_factory=DeviceAlarmStats)
 
     @property
     def serial(self) -> str:
@@ -88,6 +97,8 @@ class StationData:
     active_alarms: list[dict[str, Any]] = field(default_factory=list)
     #: Most recent alarm of the account, recovered or not.
     latest_alarm: dict[str, Any] | None = None
+    #: Isolation and recurrence analysis over the recent alarm history.
+    alarm_stats: AlarmStats = field(default_factory=AlarmStats)
 
     @property
     def name(self) -> str:
@@ -185,9 +196,10 @@ class RockcoreCoordinator(DataUpdateCoordinator[dict[str, StationData]]):
         by device. The plant's ``isAlarm`` flag is deliberately ignored: it stays
         false even while alarms are open, so it never reflected reality.
         """
-        active, latest = await asyncio.gather(
+        active, latest, recent = await asyncio.gather(
             self.client.async_get_active_alarms(),
             self.client.async_get_latest_alarm(),
+            self.client.async_get_recent_alarms(ALARM_HISTORY_DAYS),
         )
 
         # An alarm carries the device UUID and the serial, never the numeric id.
@@ -224,6 +236,33 @@ class RockcoreCoordinator(DataUpdateCoordinator[dict[str, StationData]]):
 
         if unmatched:
             _LOGGER.debug("%s open alarm(s) did not match a known inverter", unmatched)
+
+        self._score_alarms(stations, recent)
+
+    @staticmethod
+    def _score_alarms(
+        stations: dict[str, StationData], recent: list[dict[str, Any]]
+    ) -> None:
+        """Rank each inverter against its peers by isolated, recurrent alarms.
+
+        The analysis runs per plant so the fleet a unit is compared against is
+        the one it shares a grid event with.
+        """
+        for station in stations.values():
+            by_serial = {
+                inverter.serial: inverter for inverter in station.inverters.values()
+            }
+            station.alarm_stats = compute_alarm_stats(
+                recent,
+                by_serial,
+                window=ALARM_COINCIDENCE_WINDOW,
+                recent_days=ALARM_RECENT_DAYS,
+                recent_days_min=ALARM_RECENT_DAYS_MIN,
+            )
+            for serial, inverter in by_serial.items():
+                inverter.alarm_stats = station.alarm_stats.per_device.get(
+                    serial, DeviceAlarmStats()
+                )
 
     async def async_load_station_config(self) -> None:
         """Fetch the static plant configuration once, for device metadata."""
